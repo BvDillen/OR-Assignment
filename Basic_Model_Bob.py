@@ -84,7 +84,7 @@ for i in range(n_flights):
     t_arr = flights[arrival_name][i]
     t_dep = flights[departure_name][i]
 
-    # loop over the other aircraft
+    # Loop over the other aircraft
     for k in range(i+1,n_flights):
 
         # Check if other flights are at the airport at the same time
@@ -128,7 +128,7 @@ Solve
 '''
 
 # Write .lp file
-model.write('Basic_Model.lp')
+#model.write('Basic_Model.lp')
 
 # Optimize the model
 model.optimize()
