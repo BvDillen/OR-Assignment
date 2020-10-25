@@ -71,16 +71,12 @@ for flight1 in FlightID:
         
         
             
-
-
-
-            
-
-
 #optimize problem
 m.optimize()   
 for v in m.getVars():
-    print('%s %g' % (v.varName, v.x))
+    if not abs(v.x) == 0:
+        print('%s %g' % (v.varName, v.x))
+   
 
 print('Obj: %g' % m.objVal)           
             
