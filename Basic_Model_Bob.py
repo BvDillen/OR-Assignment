@@ -22,8 +22,8 @@ flights_sheet = 'Flight Schedule'
 
 flight_name = 'Flight No.'
 pax_name = 'Pax'
-arrival_name = 'Arrival'
-departure_name = 'Departure'
+arrival_name = 'ETA'
+departure_name = 'ETD'
 gate_name = 'Gate'
 distance_name = 'Walking Distance'
 
