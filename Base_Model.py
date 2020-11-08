@@ -9,8 +9,9 @@ Importing data
 '''
 
 # Import the data from the excel file
-gate_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Gates')
 flight_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Flight Schedule')
+transfer_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Transfers')
+gate_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Gates')
 airline_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Airlines')
 
 # Process flight data
@@ -40,13 +41,22 @@ for r in range(len(flight_import)):
     ETD[reg_i] = flight_import['ETD'][r]
 
 # Process transfer data
+arr_flight = []
+dep_flight = []
+PAX_transfer = {}
 
+for p in range(len(transfer_import)):
+    arr_flight_p = transfer_import['Arriving Flight'][p]
+    dep_flight_p = transfer_import['Departing Flight'][p]
+    arr_flight.append(arr_flight_p)
+    dep_flight.append(dep_flight_p)
+
+    PAX_transfer[arr_flight_p,dep_flight_p] = transfer_import['PAX'][p]
 
 # Process gate data
 gate = []
 distance = {}
 comp_ac = {}
-gate_type = {}
 gate_security = {}
 
 for g in range(len(gate_import)):
