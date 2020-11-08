@@ -3,75 +3,84 @@ from gurobipy import GRB
 import numpy as np
 import pandas as pd
 
-gate_sheet_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Gates')
-flight_sheet_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Flight Schedule')
 
-gate_import = gate_sheet_import['Gate']
-distance_import = gate_sheet_import['Walking Distance']
-comp_ac_import = gate_sheet_import['Comp. AC']
-gate_type_import = gate_sheet_import['Type']
-gate_security_import = gate_sheet_import['Security']
-flight_import = flight_sheet_import['Flight No.']
-PAX_import = flight_sheet_import['Pax']
-ETA_import = flight_sheet_import['ETA']
-ETD_import = flight_sheet_import['ETD']
-AC_import = flight_sheet_import['AC']
-sec_in_import = flight_sheet_import['Security In']
-sec_out_import = flight_sheet_import['Security Out']
-flight_type_import = flight_sheet_import['Type']
+'''
+Importing data
+'''
 
-types = np.array([['FSNC', 'Jet Bridge'], ['Low-Cost', 'Remote'], ['Business', 'Business']])
+# Import the data from the excel file
+gate_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Gates')
+flight_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Flight Schedule')
+airline_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Airlines')
 
+# Process flight data
+flight = []
+PAX = {}
+ETA = {}
+ETD = {}
+AC = {}
+sec_in = {}
+sec_out = {}
+
+for f in range(len(flight_import)):
+    flight_i = flight_import['Flight No.'][f]
+    flight.append(flight_i)
+
+    PAX[flight_i] = flight_import['Pax'][f]
+    ETA[flight_i] = flight_import['ETA'][f]
+    ETD[flight_i] = flight_import['ETD'][f]
+    AC[flight_i] = flight_import['AC'][f]
+    sec_in[flight_i] = flight_import['Security In'][f]
+    sec_out[flight_i] = flight_import['Security Out'][f]
+
+# Process gate data
 gate = []
 distance = {}
 comp_ac = {}
 gate_type = {}
 gate_security = {}
 
-for i in range(len(gate_import)):
-    gate_x = gate_import[i]
-    gate.append(gate_x)
-    distance[gate_x] = distance_import[i]
-    comp_ac[gate_x] = comp_ac_import[i]
-    gate_type[gate_x] = gate_type_import[i]
-    gate_security[gate_x] = gate_security_import[i]
+for g in range(len(gate_import)):
+    gate_j = gate_import['Gate'][g]
+    gate.append(gate_j)
 
-flight = []
-PAX = {}
-ETA = {}
-ETD = {}
-AC = {}
-flight_type = {}
-sec_in = {}
-sec_out = {}
+    distance[gate_j] = gate_import['Walking Distance'][g]
+    comp_ac[gate_j] = gate_import['Comp. AC'][g]
+    gate_security[gate_j] = gate_import['Security'][g]
 
-for j in range(len(flight_import)):
-    flight_x = flight_import[j]
-    flight.append(flight_x)
-    PAX[flight_x] = PAX_import[j]
-    ETA[flight_x] = ETA_import[j]
-    ETD[flight_x] = ETD_import[j]
-    AC[flight_x] = AC_import[j]
-    flight_type[flight_x] = flight_type_import[j]
-    sec_in[flight_x] = sec_in_import[j]
-    sec_out[flight_x] = sec_out_import[j]
+# Process airline data
+airline = []
+airline_code = {}
+airline_pier = {}
 
+for a in range(len(airline_import)):
+    airline_a = airline_import['Airline Code'][a]
+    airline.append(airline_a)
+
+    airline_code[airline_a] = airline_import['Airline Name'][a]
+    airline_pier[airline_a] = airline_import['Pier'][a]
+
+# Check for errors
 errorobj = {}
-for flight1 in flight:
+for f in flight:
     error = []
-    for g in range(len(comp_ac_import)):
-        if AC[flight1] in comp_ac_import[g] and sec_in[flight1] in gate_security_import[g] and sec_out[flight1] in \
-                gate_security_import[g]:
+    for g in gate:
+        if AC[f] in comp_ac[g] and sec_in[f] in gate_security[g] and sec_out[f] in gate_security[g]:
             error.append(1)
         else:
             error.append(0)
 
     if not 1 in error:
         errorobj[
-            flight1] = 'This flight is not supported at the airport as the required gate does not excist! (AC_TYPE or combi with S/NS)'
+            f] = 'This flight is not supported at the airport as the required gate does not excist! (AC_TYPE or combi with S/NS)'
 
 if not errorobj == {}:
     raise Exception(errorobj)
+
+
+'''
+Set up the model
+'''
 
 try:
 
@@ -87,32 +96,38 @@ try:
     # Add constraints
     model.addConstrs(x.sum(f, '*') == 1 for f in flight)  # 1 gate for 1 flight
 
+    # Loop over all flights
     for f1 in flight:
+        a_code = f1.strip('0123456789')
+        lhs = 0
+
+        # Loop over all gates
+        for g in gate:
+            pier = g.strip('0123456789')
+
+            # Gate should be compatible with aircraft
+            if not AC[f1] in comp_ac[g]:
+                model.addConstr(1*x[f1,g] == 0)
+
+            # Check security compatibility incoming flight
+            if not sec_in[f1] in gate_security[g]:
+                model.addConstr(1*x[f1,g] == 0)
+
+            # Check security compatibility outgoing flight
+            if not sec_out[f1] in gate_security[g]:
+                model.addConstr(1*x[f1,g] == 0)
+
+            # Aircraft should be parked at the right pier
+            if pier in airline_pier[a_code]:
+                lhs += 1*x[f1,g]
+        model.addConstr(lhs == 1)
+
         for f2 in flight:
 
             # 2 flights can't be at the same gate at the same time
             if ETD[f1] > ETA[f2] and ETA[f1] < ETD[f2] and not f1 == f2 and flight.index(f1) < flight.index(f2):
                 for g in gate:
-                    model.addConstr(1 * x[f1, g] + 1 * x[f2, g] <= 1)
-
-        LHS = 0
-        for g in gate:
-
-            # Gate should be compatible with aircraft
-            if not AC[f1] in comp_ac[g]:
-                model.addConstr(1 * x[f1, g] == 0)
-
-            if not sec_in[f1] in gate_security[g]:
-                model.addConstr(1 * x[f1, g] == 0)
-
-            if not sec_out[f1] in gate_security[g]:
-                model.addConstr(1 * x[f1, g] == 0)
-
-            # Assign flight to the right gate type
-            t = np.where(types == flight_type[f1])[0][0]
-            if gate_type[g] == types[t][1]:
-                LHS += x[f1, g]
-        model.addConstr(LHS == 1)
+                    model.addConstr(1*x[f1,g] + 1*x[f2,g] <= 1)
 
     # Optimize model
     model.optimize()
