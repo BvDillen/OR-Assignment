@@ -14,24 +14,33 @@ flight_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Flight Schedule'
 airline_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Airlines')
 
 # Process flight data
-flight = []
-PAX = {}
-ETA = {}
-ETD = {}
+reg = []
 AC = {}
+flight_in = {}
+PAX_in = {}
 sec_in = {}
+ETA = {}
+flight_out = {}
+PAX_out = {}
 sec_out = {}
+ETD = {}
 
-for f in range(len(flight_import)):
-    flight_i = flight_import['Flight No.'][f]
-    flight.append(flight_i)
+for r in range(len(flight_import)):
+    reg_i = flight_import['Registration'][r]
+    reg.append(reg_i)
 
-    PAX[flight_i] = flight_import['Pax'][f]
-    ETA[flight_i] = flight_import['ETA'][f]
-    ETD[flight_i] = flight_import['ETD'][f]
-    AC[flight_i] = flight_import['AC'][f]
-    sec_in[flight_i] = flight_import['Security In'][f]
-    sec_out[flight_i] = flight_import['Security Out'][f]
+    AC[reg_i] = flight_import['AC'][r]
+    flight_in[reg_i] = flight_import['Flight No. In'][r]
+    PAX_in[reg_i] = flight_import['Pax In'][r]
+    sec_in[reg_i] = flight_import['Security In'][r]
+    ETA[reg_i] = flight_import['ETA'][r]
+    flight_out[reg_i] = flight_import['Flight No. Out'][r]
+    PAX_out[reg_i] = flight_import['Pax Out'][r]
+    sec_out[reg_i] = flight_import['Security Out'][r]
+    ETD[reg_i] = flight_import['ETD'][r]
+
+# Process transfer data
+
 
 # Process gate data
 gate = []
@@ -62,17 +71,17 @@ for a in range(len(airline_import)):
 
 # Check for errors
 errorobj = {}
-for f in flight:
+for r in reg:
     error = []
     for g in gate:
-        if AC[f] in comp_ac[g] and sec_in[f] in gate_security[g] and sec_out[f] in gate_security[g]:
+        if AC[r] in comp_ac[g] and sec_in[r] in gate_security[g] and sec_out[r] in gate_security[g]:
             error.append(1)
         else:
             error.append(0)
 
     if not 1 in error:
         errorobj[
-            f] = 'This flight is not supported at the airport as the required gate does not excist! (AC_TYPE or combi with S/NS)'
+            r] = 'This flight is not supported at the airport as the required gate does not excist! (AC_TYPE or combi with S/NS)'
 
 if not errorobj == {}:
     raise Exception(errorobj)
@@ -88,17 +97,17 @@ try:
     model = gp.Model("Gate_Planning")
 
     # Create variables
-    x = model.addVars(flight, gate, vtype=GRB.BINARY, name="x")
+    x = model.addVars(reg, gate, vtype=GRB.BINARY, name="x")
 
     # Create objective
-    model.setObjective(gp.quicksum(PAX[f] * distance[g] * x[f, g] for f in flight for g in gate), GRB.MINIMIZE)
+    model.setObjective(gp.quicksum(PAX_in[r]*distance[g] * x[r,g] for r in reg for g in gate), GRB.MINIMIZE)
 
     # Add constraints
-    model.addConstrs(x.sum(f, '*') == 1 for f in flight)  # 1 gate for 1 flight
+    model.addConstrs(x.sum(r,'*') == 1 for r in reg)  # 1 gate for 1 flight
 
     # Loop over all flights
-    for f1 in flight:
-        a_code = f1.strip('0123456789')
+    for r1 in reg:
+        a_code = flight_in[r1].strip('0123456789')
         lhs = 0
 
         # Loop over all gates
@@ -106,28 +115,28 @@ try:
             pier = g.strip('0123456789')
 
             # Gate should be compatible with aircraft
-            if not AC[f1] in comp_ac[g]:
-                model.addConstr(1*x[f1,g] == 0)
+            if not AC[r1] in comp_ac[g]:
+                model.addConstr(1*x[r1,g] == 0)
 
             # Check security compatibility incoming flight
-            if not sec_in[f1] in gate_security[g]:
-                model.addConstr(1*x[f1,g] == 0)
+            if not sec_in[r1] in gate_security[g]:
+                model.addConstr(1*x[r1,g] == 0)
 
             # Check security compatibility outgoing flight
-            if not sec_out[f1] in gate_security[g]:
-                model.addConstr(1*x[f1,g] == 0)
+            if not sec_out[r1] in gate_security[g]:
+                model.addConstr(1*x[r1,g] == 0)
 
             # Aircraft should be parked at the right pier
             if pier in airline_pier[a_code]:
-                lhs += 1*x[f1,g]
+                lhs += 1*x[r1,g]
         model.addConstr(lhs == 1)
 
-        for f2 in flight:
+        for r2 in reg:
 
             # 2 flights can't be at the same gate at the same time
-            if ETD[f1] > ETA[f2] and ETA[f1] < ETD[f2] and not f1 == f2 and flight.index(f1) < flight.index(f2):
+            if ETD[r1] > ETA[r2] and ETA[r1] < ETD[r2] and not r1 == r2 and reg.index(r1) < reg.index(r2):
                 for g in gate:
-                    model.addConstr(1*x[f1,g] + 1*x[f2,g] <= 1)
+                    model.addConstr(1*x[r1,g] + 1*x[r2,g] <= 1)
 
     # Optimize model
     model.optimize()
