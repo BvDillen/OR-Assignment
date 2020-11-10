@@ -5,14 +5,27 @@ import pandas as pd
 
 
 '''
+Functions
+'''
+
+def get_registration(dictionary,flight_no):
+    i = list(dictionary.values()).index(flight_no)
+    r = list(dictionary.keys())[i]
+    return r
+
+
+'''
 Importing data
 '''
 
+file_name = 'Gate_Planning.xlsx'
+
 # Import the data from the excel file
-flight_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Flight Schedule')
-transfer_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Transfers')
-gate_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Gates')
-airline_import = pd.read_excel('Gate_Planning.xlsx', sheet_name='Airlines')
+flight_import = pd.read_excel(file_name, sheet_name='Flight Schedule')
+transfer_import = pd.read_excel(file_name, sheet_name='Transfers')
+gate_import = pd.read_excel(file_name, sheet_name='Gates')
+pier_import = pd.read_excel(file_name, sheet_name='Piers')
+airline_import = pd.read_excel(file_name, sheet_name='Airlines')
 
 # Process flight data
 reg = []
@@ -44,6 +57,7 @@ for r in range(len(flight_import)):
 arr_flight = []
 dep_flight = []
 PAX_transfer = {}
+PAX_transfer_t = {}
 
 for p in range(len(transfer_import)):
     arr_flight_p = transfer_import['Arriving Flight'][p]
@@ -51,7 +65,19 @@ for p in range(len(transfer_import)):
     arr_flight.append(arr_flight_p)
     dep_flight.append(dep_flight_p)
 
-    PAX_transfer[arr_flight_p,dep_flight_p] = transfer_import['PAX'][p]
+    reg_arr = get_registration(flight_in,arr_flight_p)
+    reg_dep = get_registration(flight_out,dep_flight_p)
+
+    PAX_transfer[reg_arr,reg_dep] = transfer_import['PAX'][p]
+
+    if reg_arr in PAX_transfer_t:
+        PAX_transfer_t[reg_arr] += transfer_import['PAX'][p]
+    else:
+        PAX_transfer_t[reg_arr] = transfer_import['PAX'][p]
+    if reg_dep in PAX_transfer_t:
+        PAX_transfer_t[reg_dep] += transfer_import['PAX'][p]
+    else:
+        PAX_transfer_t[reg_dep] = transfer_import['PAX'][p]
 
 # Process gate data
 gate = []
@@ -66,6 +92,29 @@ for g in range(len(gate_import)):
     distance[gate_j] = gate_import['Walking Distance'][g]
     comp_ac[gate_j] = gate_import['Comp. AC'][g]
     gate_security[gate_j] = gate_import['Security'][g]
+
+# Process pier data
+pier = []
+pier_distance = {}
+
+for p in range(len(pier_import)):
+    pier_in = pier_import['From'][p]
+    pier_out = pier_import['To'][p]
+
+    if pier_in not in pier:
+        pier.append(pier_in)
+    if pier_out not in pier:
+        pier.append(pier_out)
+
+    pier_distance[pier_in,pier_out] = pier_import['Distance'][p]
+
+for p1 in pier:
+    for p2 in pier:
+        if p1 != p2 and (p1,p2) not in pier_distance:
+            if p2 == 'A':
+                pier_distance[p1,p2] = pier_distance[p2,p1]
+            else:
+                pier_distance[p1,p2] = abs(pier_distance['A',p1]-pier_distance['A',p2])
 
 # Process airline data
 airline = []
@@ -113,28 +162,34 @@ try:
 
     # Create transfer variables
     t = {}
+    obj_transfer = 0
     # Loop over all arriving flight with transfer pax
-    for f1 in arr_flight:
+    for f in range(len(arr_flight)):
+        f1 = arr_flight[f]
+        f2 = dep_flight[f]
+
         # Determine ac registration arriving flight
-        i = list(flight_in.values()).index(f1)
-        r1 = list(flight_in.keys())[i]
+        r1 = get_registration(flight_in,f1)
+        r2 = get_registration(flight_out,f2)
+
         for g1 in gate:
             # Determine pier
             p1 = g1.strip('0123456789')
-            # Loop over all departing flights with transfer pax
-            for f2 in dep_flight:
-                # Determine ac registration departing flight
-                ip = list(flight_out.values()).index(f2)
-                r2 = list(flight_out.keys())[ip]
-                for g2 in gate:
-                    # Determine pier
-                    p2 = g2.strip('0123456789')
+            for g2 in gate:
+                # Determine pier
+                p2 = g2.strip('0123456789')
+                if p1 != p2:
                     # Create variable
-                    if r1 != r2 and p1 != p2:
-                        t[r1,g1,r2,g2] = model.addVar(ub=1,vtype=GRB.BINARY,name="t[%s,%s,%s,%s]"%(r1,g1,r2,g2))
+                    t[r1,g1,r2,g2] = model.addVar(ub=1,vtype=GRB.BINARY,name="t[%s,%s,%s,%s]"%(r1,g1,r2,g2))
+                    model.update()
+                    # Add constraint
+                    model.addConstr(1*x[r1,g1] + 1*x[r2,g2] - t[r1,g1,r2,g2] <= 1)
+                    # Contribution to objective
+                    obj_transfer += PAX_transfer[r1,r2]*pier_distance[p1,p2]*t[r1,g1,r2,g2]
 
     # Create objective
-    model.setObjective(gp.quicksum((PAX_in[r]+PAX_out[r])*distance[g] * x[r,g] for r in reg for g in gate), GRB.MINIMIZE)
+
+    model.setObjective(gp.quicksum((PAX_in[r] + PAX_out[r] - PAX_transfer_t[r])*distance[g] * x[r,g] for r in reg for g in gate) + obj_transfer, GRB.MINIMIZE)
 
     # Add constraints
     model.addConstrs(x.sum(r,'*') == 1 for r in reg)  # 1 gate for 1 flight
