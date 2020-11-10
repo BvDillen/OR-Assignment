@@ -107,10 +107,34 @@ try:
     model = gp.Model("Gate_Planning")
 
     # Create variables
+
+    # Create gate allocation variables
     x = model.addVars(reg, gate, vtype=GRB.BINARY, name="x")
 
+    # Create transfer variables
+    t = {}
+    # Loop over all arriving flight with transfer pax
+    for f1 in arr_flight:
+        # Determine ac registration arriving flight
+        i = list(flight_in.values()).index(f1)
+        r1 = list(flight_in.keys())[i]
+        for g1 in gate:
+            # Determine pier
+            p1 = g1.strip('0123456789')
+            # Loop over all departing flights with transfer pax
+            for f2 in dep_flight:
+                # Determine ac registration departing flight
+                ip = list(flight_out.values()).index(f2)
+                r2 = list(flight_out.keys())[ip]
+                for g2 in gate:
+                    # Determine pier
+                    p2 = g2.strip('0123456789')
+                    # Create variable
+                    if r1 != r2 and p1 != p2:
+                        t[r1,g1,r2,g2] = model.addVar(ub=1,vtype=GRB.BINARY,name="t[%s,%s,%s,%s]"%(r1,g1,r2,g2))
+
     # Create objective
-    model.setObjective(gp.quicksum(PAX_in[r]*distance[g] * x[r,g] for r in reg for g in gate), GRB.MINIMIZE)
+    model.setObjective(gp.quicksum((PAX_in[r]+PAX_out[r])*distance[g] * x[r,g] for r in reg for g in gate), GRB.MINIMIZE)
 
     # Add constraints
     model.addConstrs(x.sum(r,'*') == 1 for r in reg)  # 1 gate for 1 flight
