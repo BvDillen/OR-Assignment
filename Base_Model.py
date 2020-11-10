@@ -160,7 +160,7 @@ try:
     # Create gate allocation variables
     x = model.addVars(reg, gate, vtype=GRB.BINARY, name="x")
 
-    # Create transfer variables
+    # Transfers
     t = {}
     obj_transfer = 0
     # Loop over all arriving flight with transfer pax
@@ -188,7 +188,6 @@ try:
                     obj_transfer += PAX_transfer[r1,r2]*pier_distance[p1,p2]*t[r1,g1,r2,g2]
 
     # Create objective
-
     model.setObjective(gp.quicksum((PAX_in[r] + PAX_out[r] - PAX_transfer_t[r])*distance[g] * x[r,g] for r in reg for g in gate) + obj_transfer, GRB.MINIMIZE)
 
     # Add constraints
