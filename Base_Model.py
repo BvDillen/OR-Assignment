@@ -91,7 +91,10 @@ for g in range(len(gate_import)):
 
     distance[gate_j] = gate_import['Walking Distance'][g]
     comp_ac[gate_j] = gate_import['Comp. AC'][g]
-    gate_security[gate_j] = gate_import['Security'][g]
+    if gate_import['Security'][g] == 'S' or gate_import['Security'][g] == 'N':
+        gate_security[gate_j] = gate_import['Security'][g]
+    else:
+        gate_security[gate_j] = 'NS'
 
 # Process pier data
 pier = []
