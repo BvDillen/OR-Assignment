@@ -190,8 +190,16 @@ try:
                     # Contribution to objective
                     obj_transfer += PAX_transfer[r1,r2]*pier_distance[p1,p2]*t[r1,g1,r2,g2]
 
+    # Determine amount of passengers
+    PAX = {}
+    for r in reg:
+        if r in PAX_transfer_t:
+            PAX[r] = PAX_in[r] + PAX_out[r] - PAX_transfer_t[r]
+        else:
+            PAX[r] = PAX_in[r] + PAX_out[r]
+
     # Create objective
-    model.setObjective(gp.quicksum((PAX_in[r] + PAX_out[r] - PAX_transfer_t[r])*distance[g] * x[r,g] for r in reg for g in gate) + obj_transfer, GRB.MINIMIZE)
+    model.setObjective(gp.quicksum(PAX[r]*distance[g] * x[r,g] for r in reg for g in gate) + obj_transfer, GRB.MINIMIZE)
 
     # Add constraints
     model.addConstrs(x.sum(r,'*') == 1 for r in reg)  # 1 gate for 1 flight
