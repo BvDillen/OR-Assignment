@@ -139,7 +139,7 @@ for p in range(len(pier_passport_import)):
     pier_passport_p = pier_passport_import['Pier'][p]
     pier_passport.append(pier_passport_p)
 
-    pier_distance[pier_passport_p,pier_passport_p] = pier_passport_import['Distance'][p]
+    pier_distance[pier_passport_p,pier_passport_p] = 2*pier_passport_import['Distance'][p]
 
 # Check for errors
 errorobj = {}
