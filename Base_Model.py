@@ -1,6 +1,5 @@
 import gurobipy as gp
 from gurobipy import GRB
-import numpy as np
 import pandas as pd
 
 
@@ -12,6 +11,13 @@ def get_registration(dictionary,flight_no):
     i = list(dictionary.values()).index(flight_no)
     r = list(dictionary.keys())[i]
     return r
+
+def hour_fraction(time):
+    hours = time.hour
+    minutes = time.minute
+    seconds = time.second
+    new_time = hours + minutes/60 + seconds/3600
+    return new_time
 
 
 '''
@@ -27,6 +33,7 @@ gate_import = pd.read_excel(file_name, sheet_name='Gates')
 pier_import = pd.read_excel(file_name, sheet_name='Piers')
 pier_passport_import = pd.read_excel(file_name, sheet_name='Passport Control')
 airline_import = pd.read_excel(file_name, sheet_name='Airlines')
+buffer_import = pd.read_excel(file_name, sheet_name='Buffer Time')
 
 # Process flight data
 reg = []
@@ -48,11 +55,11 @@ for r in range(len(flight_import)):
     flight_in[reg_i] = flight_import['Flight No. In'][r]
     PAX_in[reg_i] = flight_import['Pax In'][r]
     sec_in[reg_i] = flight_import['Security In'][r]
-    ETA[reg_i] = flight_import['ETA'][r]
+    ETA[reg_i] = hour_fraction(flight_import['ETA'][r])
     flight_out[reg_i] = flight_import['Flight No. Out'][r]
     PAX_out[reg_i] = flight_import['Pax Out'][r]
     sec_out[reg_i] = flight_import['Security Out'][r]
-    ETD[reg_i] = flight_import['ETD'][r]
+    ETD[reg_i] = hour_fraction(flight_import['ETD'][r])
 
 # Process transfer data
 arr_flight = []
@@ -140,6 +147,9 @@ for p in range(len(pier_passport_import)):
     pier_passport.append(pier_passport_p)
 
     pier_distance[pier_passport_p,pier_passport_p] = 2*pier_passport_import['Distance'][p]
+
+# Process buffer time data
+tb = buffer_import['Buffer Time (minutes)'][0]/60
 
 # Check for errors
 errorobj = {}
@@ -242,7 +252,7 @@ try:
         for r2 in reg:
 
             # 2 flights can't be at the same gate at the same time
-            if ETD[r1] > ETA[r2] and ETA[r1] < ETD[r2] and not r1 == r2 and reg.index(r1) < reg.index(r2):
+            if (ETD[r1]+tb) > ETA[r2] and ETA[r1] < (ETD[r2]+tb) and not r1 == r2 and reg.index(r1) < reg.index(r2):
                 for g in gate:
                     model.addConstr(1*x[r1,g] + 1*x[r2,g] <= 1)
 
