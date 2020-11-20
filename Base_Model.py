@@ -25,6 +25,7 @@ flight_import = pd.read_excel(file_name, sheet_name='Flight Schedule')
 transfer_import = pd.read_excel(file_name, sheet_name='Transfers')
 gate_import = pd.read_excel(file_name, sheet_name='Gates')
 pier_import = pd.read_excel(file_name, sheet_name='Piers')
+pier_passport_import = pd.read_excel(file_name, sheet_name='Passport Control')
 airline_import = pd.read_excel(file_name, sheet_name='Airlines')
 
 # Process flight data
@@ -131,6 +132,15 @@ for a in range(len(airline_import)):
     airline_code[airline_a] = airline_import['Airline Name'][a]
     airline_pier[airline_a] = airline_import['Pier'][a]
 
+# Process passport control data
+pier_passport = []
+
+for p in range(len(pier_passport_import)):
+    pier_passport_p = pier_passport_import['Pier'][p]
+    pier_passport.append(pier_passport_p)
+
+    pier_distance[pier_passport_p,pier_passport_p] = pier_passport_import['Distance'][p]
+
 # Check for errors
 errorobj = {}
 for r in reg:
@@ -181,10 +191,9 @@ try:
             for g2 in gate:
                 # Determine pier
                 p2 = g2.strip('0123456789')
-                if p1 != p2:
+                if (p1 == p2 and sec_in[r1] != sec_out[r2]) or p1 != p2:
                     # Create variable
                     t[r1,g1,r2,g2] = model.addVar(ub=1,vtype=GRB.BINARY,name="t[%s,%s,%s,%s]"%(r1,g1,r2,g2))
-                    model.update()
                     # Add constraint
                     model.addConstr(1*x[r1,g1] + 1*x[r2,g2] - t[r1,g1,r2,g2] <= 1)
                     # Contribution to objective
