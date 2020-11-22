@@ -310,9 +310,9 @@ ax12 = ax11.twinx()
 ax11.plot(buffer_time, walking_distance_data, 'r-')
 ax12.plot(buffer_time, non_used_gates_data, 'b-')
 
-ax11.set_xlabel('Buffer time')
+ax11.set_xlabel('Buffer time [min]')
 ax11.set_ylabel('Walking distance [km (*10E3)]', color='r')
-ax12.set_ylabel('Non-used gates', color = 'b')
+ax12.set_ylabel('Non-used gates [-]', color = 'b')
 
 # fig2, ax21 = plt.subplots()
 #
