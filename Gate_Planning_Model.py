@@ -24,10 +24,10 @@ def hour_fraction(time):
 Importing data
 '''
 
-file_name = 'Gate_Planning.xlsx'
+file_name = 'Verification/Security.xlsx'
 
 # Model used for verification?
-verification = False
+verification = True
 
 # Import the data from the excel file
 flight_import = pd.read_excel(file_name, sheet_name='Flight Schedule')
