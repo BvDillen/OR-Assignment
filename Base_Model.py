@@ -1,7 +1,8 @@
 import gurobipy as gp
 from gurobipy import GRB
 import pandas as pd
-
+import numpy as np
+import matplotlib.pyplot as plt
 
 '''
 Functions
@@ -18,7 +19,6 @@ def hour_fraction(time):
     seconds = time.second
     new_time = hours + minutes/60 + seconds/3600
     return new_time
-
 
 '''
 Importing data
@@ -148,8 +148,7 @@ for p in range(len(pier_passport_import)):
 
     pier_distance[pier_passport_p,pier_passport_p] = 2*pier_passport_import['Distance'][p]
 
-# Process buffer time data
-tb = buffer_import['Buffer Time (minutes)'][0]/60
+
 
 # Check for errors
 errorobj = {}
@@ -169,104 +168,160 @@ if not errorobj == {}:
     raise Exception(errorobj)
 
 
+
+# Process buffer time data
+#tb = buffer_import['Buffer Time (minutes)'][0]/60
+
+buffer_time = np.arange(0, 27, 1)
+walking_distance_data = []
+non_used_gates_data = []
+gate_usage_data = []
+
+
 '''
 Set up the model
 '''
+for buffer in buffer_time:
+    tb = buffer/60
+    gate_usage = [0] * len(gate)
 
-try:
+    try:
 
-    # Create a new model
-    model = gp.Model("Gate_Planning")
+        # Create a new model
+        model = gp.Model("Gate_Planning")
 
-    # Create variables
+        # Create variables
 
-    # Create gate allocation variables
-    x = model.addVars(reg, gate, vtype=GRB.BINARY, name="x")
+        # Create gate allocation variables
+        x = model.addVars(reg, gate, vtype=GRB.BINARY, name="x")
 
-    # Transfers
-    t = {}
-    obj_transfer = 0
-    # Loop over all arriving flight with transfer pax
-    for f in range(len(arr_flight)):
-        f1 = arr_flight[f]
-        f2 = dep_flight[f]
+        # Transfers
+        t = {}
+        obj_transfer = 0
+        # Loop over all arriving flight with transfer pax
+        for f in range(len(arr_flight)):
+            f1 = arr_flight[f]
+            f2 = dep_flight[f]
 
-        # Determine ac registration arriving flight
-        r1 = get_registration(flight_in,f1)
-        r2 = get_registration(flight_out,f2)
+            # Determine ac registration arriving flight
+            r1 = get_registration(flight_in,f1)
+            r2 = get_registration(flight_out,f2)
 
-        for g1 in gate:
-            # Determine pier
-            p1 = g1.strip('0123456789')
-            for g2 in gate:
+            for g1 in gate:
                 # Determine pier
-                p2 = g2.strip('0123456789')
-                if (p1 == p2 and sec_in[r1] != sec_out[r2]) or p1 != p2:
-                    # Create variable
-                    t[r1,g1,r2,g2] = model.addVar(ub=1,vtype=GRB.BINARY,name="t[%s,%s,%s,%s]"%(r1,g1,r2,g2))
-                    # Add constraint
-                    model.addConstr(1*x[r1,g1] + 1*x[r2,g2] - t[r1,g1,r2,g2] <= 1)
-                    # Contribution to objective
-                    obj_transfer += PAX_transfer[r1,r2]*pier_distance[p1,p2]*t[r1,g1,r2,g2]
+                p1 = g1.strip('0123456789')
+                for g2 in gate:
+                    # Determine pier
+                    p2 = g2.strip('0123456789')
+                    if (p1 == p2 and sec_in[r1] != sec_out[r2]) or p1 != p2:
+                        # Create variable
+                        t[r1,g1,r2,g2] = model.addVar(ub=1,vtype=GRB.BINARY,name="t[%s,%s,%s,%s]"%(r1,g1,r2,g2))
+                        # Add constraint
+                        model.addConstr(1*x[r1,g1] + 1*x[r2,g2] - t[r1,g1,r2,g2] <= 1)
+                        # Contribution to objective
+                        obj_transfer += PAX_transfer[r1,r2]*pier_distance[p1,p2]*t[r1,g1,r2,g2]
 
-    # Determine amount of passengers
-    PAX = {}
-    for r in reg:
-        if r in PAX_transfer_t:
-            PAX[r] = PAX_in[r] + PAX_out[r] - PAX_transfer_t[r]
-        else:
-            PAX[r] = PAX_in[r] + PAX_out[r]
+        # Determine amount of passengers
+        PAX = {}
+        for r in reg:
+            if r in PAX_transfer_t:
+                PAX[r] = PAX_in[r] + PAX_out[r] - PAX_transfer_t[r]
+            else:
+                PAX[r] = PAX_in[r] + PAX_out[r]
 
-    # Create objective
-    model.setObjective(gp.quicksum(PAX[r]*distance[g] * x[r,g] for r in reg for g in gate) + obj_transfer, GRB.MINIMIZE)
+        # Create objective
+        model.setObjective(gp.quicksum(PAX[r]*distance[g] * x[r,g] for r in reg for g in gate) + obj_transfer, GRB.MINIMIZE)
 
-    # Add constraints
-    model.addConstrs(x.sum(r,'*') == 1 for r in reg)  # 1 gate for 1 flight
+        # Add constraints
+        model.addConstrs(x.sum(r,'*') == 1 for r in reg)  # 1 gate for 1 flight
 
-    # Loop over all flights
-    for r1 in reg:
-        a_code = flight_in[r1].strip('0123456789')
-        lhs = 0
+        # Loop over all flights
+        for r1 in reg:
+            a_code = flight_in[r1].strip('0123456789')
+            lhs = 0
 
-        # Loop over all gates
-        for g in gate:
-            pier = g.strip('0123456789')
+            # Loop over all gates
+            for g in gate:
+                pier = g.strip('0123456789')
 
-            # Gate should be compatible with aircraft
-            if not AC[r1] in comp_ac[g]:
-                model.addConstr(1*x[r1,g] == 0)
+                # Gate should be compatible with aircraft
+                if not AC[r1] in comp_ac[g]:
+                    model.addConstr(1*x[r1,g] == 0)
 
-            # Check security compatibility incoming flight
-            if not sec_in[r1] in gate_security[g]:
-                model.addConstr(1*x[r1,g] == 0)
+                # Check security compatibility incoming flight
+                if not sec_in[r1] in gate_security[g]:
+                    model.addConstr(1*x[r1,g] == 0)
 
-            # Check security compatibility outgoing flight
-            if not sec_out[r1] in gate_security[g]:
-                model.addConstr(1*x[r1,g] == 0)
+                # Check security compatibility outgoing flight
+                if not sec_out[r1] in gate_security[g]:
+                    model.addConstr(1*x[r1,g] == 0)
 
-            # Aircraft should be parked at the right pier
-            if pier in airline_pier[a_code]:
-                lhs += 1*x[r1,g]
-        model.addConstr(lhs == 1)
+                # Aircraft should be parked at the right pier
+                if pier in airline_pier[a_code]:
+                    lhs += 1*x[r1,g]
+            model.addConstr(lhs == 1)
 
-        for r2 in reg:
+            for r2 in reg:
 
-            # 2 flights can't be at the same gate at the same time
-            if (ETD[r1]+tb) > ETA[r2] and ETA[r1] < (ETD[r2]+tb) and not r1 == r2 and reg.index(r1) < reg.index(r2):
-                for g in gate:
-                    model.addConstr(1*x[r1,g] + 1*x[r2,g] <= 1)
+                # 2 flights can't be at the same gate at the same time
+                if (ETD[r1]+tb) > ETA[r2] and ETA[r1] < (ETD[r2]+tb) and not r1 == r2 and reg.index(r1) < reg.index(r2):
+                    for g in gate:
+                        model.addConstr(1*x[r1,g] + 1*x[r2,g] <= 1)
 
-    # Optimize model
-    model.optimize()
+        # Optimize model
+        model.optimize()
 
-    for v in model.getVars():
-        if not abs(v.x) == 0:
-            print('%s %g' % (v.varName, v.x))
+        for v in model.getVars():
+            if not abs(v.x) == 0:
+                print('%s %g' % (v.varName, v.x))
+                if v.varName[0] == 'x':
+                    if v.varName[9] == ',':
+                        gate_string = str(v.varName[10:12])
+                        reg_string = str(v.varName[2:9])
+                    elif v.varName[8] == ',':
+                        gate_string = str(v.varName[9:11])
+                        reg_string = str(v.varName[2:8])
 
-    print('Obj: %g' % model.objVal)
+                    index = gate.index(gate_string)
+                    gate_usage[index] += (ETD[reg_string] - ETA[reg_string])
 
-except gp.GurobiError as e:
-    print('Error code ' + str(e.errno) + ': ' + str(e))
+        print('Obj: %g' % model.objVal)
 
-except AttributeError:
-    print('Encountered an attribute error')
+        non_used_gates_data.append(gate_usage.count(0))
+
+        #print(gate_usage)
+
+        gate_usage_array = (np.array(gate_usage))/7
+        total_gate_usage = np.average(gate_usage_array)
+        gate_usage_data.append(total_gate_usage)
+        walking_distance_data.append(model.objVal/1E6)
+
+
+    except gp.GurobiError as e:
+        print('Error code ' + str(e.errno) + ': ' + str(e))
+
+    except AttributeError:
+        print('Encountered an attribute error')
+
+
+fig1, ax11 = plt.subplots()
+
+ax12 = ax11.twinx()
+ax11.plot(buffer_time, walking_distance_data, 'r-')
+ax12.plot(buffer_time, non_used_gates_data, 'b-')
+
+ax11.set_xlabel('Buffer time')
+ax11.set_ylabel('Walking distance [km (*10E3)]', color='r')
+ax12.set_ylabel('Non-used gates', color = 'b')
+
+# fig2, ax21 = plt.subplots()
+#
+# ax22 = ax21.twinx()
+# ax21.plot(buffer_time, walking_distance_data, 'r-')
+# ax22.plot(buffer_time, gate_usage_data, 'b-')
+#
+# ax21.set_xlabel('Buffer time')
+# ax21.set_ylabel('Walking distance', color='r')
+# ax22.set_ylabel('Gate_usage', color = 'b')
+
+plt.show()
