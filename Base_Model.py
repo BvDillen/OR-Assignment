@@ -274,7 +274,7 @@ for buffer in buffer_time:
         for v in model.getVars():
             if not abs(v.x) == 0:
                 print('%s %g' % (v.varName, v.x))
-                if v.varName[0] == 'x':
+                if v.varName[0] == 'x':                         # determine gate and registration from variable name
                     if v.varName[9] == ',':
                         gate_string = str(v.varName[10:12])
                         reg_string = str(v.varName[2:9])
@@ -283,17 +283,11 @@ for buffer in buffer_time:
                         reg_string = str(v.varName[2:8])
 
                     index = gate.index(gate_string)
-                    gate_usage[index] += (ETD[reg_string] - ETA[reg_string])
+                    gate_usage[index] += (ETD[reg_string] - ETA[reg_string])        # add gate_usage time to proper gate index
 
         print('Obj: %g' % model.objVal)
 
-        non_used_gates_data.append(gate_usage.count(0))
-
-        #print(gate_usage)
-
-        gate_usage_array = (np.array(gate_usage))/7
-        total_gate_usage = np.average(gate_usage_array)
-        gate_usage_data.append(total_gate_usage)
+        non_used_gates_data.append(gate_usage.count(0))         # append buffer time iteration outputs to overall lists
         walking_distance_data.append(model.objVal/1E6)
 
 
@@ -303,8 +297,10 @@ for buffer in buffer_time:
     except AttributeError:
         print('Encountered an attribute error')
 
-
+### Plot the sensitivity of the buffer time in terms of non-used gates and pax walking distance
 fig1, ax11 = plt.subplots()
+
+plt.title('Gate buffer time vs Pax walking distance & Non-used gates')
 
 ax12 = ax11.twinx()
 ax11.plot(buffer_time, walking_distance_data, 'r-')
@@ -313,15 +309,5 @@ ax12.plot(buffer_time, non_used_gates_data, 'b-')
 ax11.set_xlabel('Buffer time [min]')
 ax11.set_ylabel('Walking distance [km (*10E3)]', color='r')
 ax12.set_ylabel('Non-used gates [-]', color = 'b')
-
-# fig2, ax21 = plt.subplots()
-#
-# ax22 = ax21.twinx()
-# ax21.plot(buffer_time, walking_distance_data, 'r-')
-# ax22.plot(buffer_time, gate_usage_data, 'b-')
-#
-# ax21.set_xlabel('Buffer time')
-# ax21.set_ylabel('Walking distance', color='r')
-# ax22.set_ylabel('Gate_usage', color = 'b')
 
 plt.show()
