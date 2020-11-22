@@ -286,7 +286,6 @@ try:
     gate_usage_array = (np.array(gate_usage))/7
     total_gate_usage = np.average(gate_usage_array)
 
-
 except gp.GurobiError as e:
     print('Error code ' + str(e.errno) + ': ' + str(e))
 
