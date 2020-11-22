@@ -26,6 +26,9 @@ Importing data
 
 file_name = 'Gate_Planning.xlsx'
 
+# Model used for verification?
+verification = False
+
 # Import the data from the excel file
 flight_import = pd.read_excel(file_name, sheet_name='Flight Schedule')
 transfer_import = pd.read_excel(file_name, sheet_name='Transfers')
@@ -268,7 +271,7 @@ try:
     for v in model.getVars():
         if not abs(v.x) == 0:
             print('%s %g' % (v.varName, v.x))
-            if v.varName[0] == 'x':
+            if v.varName[0] == 'x' and not verification:
                 if v.varName[9] == ',':
                     gate_string = str(v.varName[10:12])
                     reg_string = str(v.varName[2:9])
